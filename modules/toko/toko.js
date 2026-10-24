@@ -330,6 +330,9 @@ function tampilTitipan(data = titipan){
         tombolArsip.textContent = statusBuka + " Arsip Nota Pengambilan (" + selesai.length + ")";
     }
 
+    // Arsip cuma dirender kalau sedang terbuka (arsip yang menumpuk itu berat)
+    let arsipTerbuka = !!areaArsip && areaArsip.style.display === "block";
+
     // Kumpulkan HTML dulu di string, dipasang sekali di akhir (lebih ringan)
     let htmlBerjalan = "";
     let htmlArsip = "";
@@ -346,6 +349,7 @@ function tampilTitipan(data = titipan){
 
             let tujuan = areaArsip;
             if(!tujuan) return; // belum ada elemen arsip, lewati
+            if(!arsipTerbuka) return; // arsip tertutup, tidak perlu dirender
 
             let kelasBayar = t.statusBayar === "lunas"
                 ? "bayar-lunas"
