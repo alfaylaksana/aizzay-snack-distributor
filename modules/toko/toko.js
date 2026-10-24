@@ -23,6 +23,9 @@ let sedangSettleId = null;
 // ID TITIPAN (KIRIM) YANG SEDANG DIEDIT (null kalau input baru)
 let sedangEditKirimId = null;
 
+// STATUS BUKA/TUTUP PER BULAN DI ARSIP (kunci "2026-10" -> true/false, hanya kalau user pernah menekan)
+let statusBulanArsip = {};
+
 
 // TAMPIL DULUAN DARI LOCAL STORAGE (offline-first)
 tampilTitipan();
@@ -36,6 +39,9 @@ muatDraft();
 
 // KALAU ADA DRAFT SETTLE TERTUNDA, BUKA OTOMATIS
 cobaBukaSettleDariDraft();
+
+// TOMBOL MENGAMBANG KE KOLOM SEARCH
+buatTombolKeSearch();
 
 // AUTO-SIMPAN DRAFT TIAP KALI ADA PERUBAHAN DI FORM KIRIM
 document
@@ -336,6 +342,8 @@ function tampilTitipan(data = titipan){
     // Kumpulkan HTML dulu di string, dipasang sekali di akhir (lebih ringan)
     let htmlBerjalan = "";
     let htmlArsip = "";
+    let jumlahPerBulan = {};
+    let isiPerBulan = {};
 
     let urut = [...data].sort((a, b) => {
         return new Date(b.tanggalKirim) - new Date(a.tanggalKirim);
@@ -350,6 +358,10 @@ function tampilTitipan(data = titipan){
             let tujuan = areaArsip;
             if(!tujuan) return; // belum ada elemen arsip, lewati
             if(!arsipTerbuka) return; // arsip tertutup, tidak perlu dirender
+
+            let kunciBulan = kunciBulanArsip(t);
+            jumlahPerBulan[kunciBulan] = (jumlahPerBulan[kunciBulan] || 0) + 1;
+            if(!bulanArsipDibuka(kunciBulan)) return; // bulan terlipat: kartu tidak dibangun
 
             let kelasBayar = t.statusBayar === "lunas"
                 ? "bayar-lunas"
@@ -397,7 +409,7 @@ function tampilTitipan(data = titipan){
                 })()}
             `;
 
-            htmlArsip += `
+            isiPerBulan[kunciBulan] = (isiPerBulan[kunciBulan] || "") + `
 
             <div class="card">
 
@@ -518,6 +530,26 @@ function tampilTitipan(data = titipan){
 
     });
 
+    // Susun arsip jadi accordion per bulan (bulan terbaru di atas)
+    let nilaiUrut = (k) => /^\d{4}-\d{2}$/.test(k) ? k : "0000-00";
+
+    Object.keys(jumlahPerBulan)
+        .sort((a, b) => nilaiUrut(a) < nilaiUrut(b) ? 1 : nilaiUrut(a) > nilaiUrut(b) ? -1 : 0)
+        .forEach(kunci=>{
+
+            let buka = bulanArsipDibuka(kunci);
+
+            htmlArsip += `
+            <details class="arsip-bulan"${buka ? " open" : ""} style="margin-bottom:8px;">
+                <summary style="cursor:pointer;font-weight:bold;font-size:13px;padding:6px 0;" onclick="event.preventDefault(); toggleBulanArsip('${kunci}')">
+                    ${namaBulanArsip(kunci)} (${jumlahPerBulan[kunci]})
+                </summary>
+                ${isiPerBulan[kunci] || ""}
+            </details>
+            `;
+
+        });
+
     area.innerHTML = htmlBerjalan;
     if(areaArsip) areaArsip.innerHTML = htmlArsip;
 
@@ -534,6 +566,106 @@ function toggleArsip(){
     areaArsip.style.display = (areaArsip.style.display === "block") ? "none" : "block";
 
     tampilTitipan(); // refresh teks tombol (▲/📁)
+
+}
+
+
+// KUNCI BULAN ARSIP ("2026-10") DARI TANGGAL PENGAMBILAN (settle)
+function kunciBulanArsip(t){
+
+    let tgl = t.tanggalSettle || t.tanggalKirim || "";
+
+    return tgl.slice(0, 7) || "tanpa-tanggal";
+
+}
+
+
+// NAMA BULAN UNTUK JUDUL ACCORDION ("2026-10" -> "Oktober 2026")
+function namaBulanArsip(kunci){
+
+    let namaBulan = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
+
+    if(!/^\d{4}-\d{2}$/.test(kunci)) return "Tanpa tanggal";
+
+    let bagian = kunci.split("-");
+
+    return (namaBulan[Number(bagian[1]) - 1] || bagian[1]) + " " + bagian[0];
+
+}
+
+
+// APAKAH KOLOM SEARCH SEDANG ADA ISINYA
+function adaKataCari(){
+
+    let kolom = document.getElementById("cariToko");
+
+    return !!kolom && kolom.value.trim() !== "";
+
+}
+
+
+// BULAN INI TERBUKA, BULAN LAMA TERLIPAT (kecuali sedang mencari, atau user sudah pernah menekan)
+function bulanArsipDibuka(kunci){
+
+    if(kunci in statusBulanArsip) return statusBulanArsip[kunci];
+
+    let d = new Date();
+    let bulanIni = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+
+    return kunci === bulanIni || adaKataCari();
+
+}
+
+
+// BUKA/TUTUP SATU BULAN DI ARSIP
+function toggleBulanArsip(kunci){
+
+    statusBulanArsip[kunci] = !bulanArsipDibuka(kunci);
+
+    if(adaKataCari()){
+        jalankanCariToko(); // tetap tampilkan hasil pencarian, bukan semua data
+    } else {
+        tampilTitipan();
+    }
+
+}
+
+
+// TOMBOL MENGAMBANG: LONCAT KE KOLOM SEARCH SAAT KOLOM SEARCH TIDAK TERLIHAT DI LAYAR
+function buatTombolKeSearch(){
+
+    let halaman = document.querySelector(".toko-page");
+    let kolomCari = document.getElementById("cariToko");
+
+    if(!halaman || !kolomCari) return;
+
+    let lama = document.getElementById("tombolKeSearch");
+    if(lama) lama.remove();
+
+    let tombol = document.createElement("button");
+    tombol.id = "tombolKeSearch";
+    tombol.type = "button";
+    tombol.textContent = "🔍";
+    tombol.setAttribute("aria-label", "Ke kolom Search");
+    tombol.style.cssText =
+        "position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom, 0px));" +
+        "width:48px;height:48px;margin:0;padding:0;border:none;border-radius:50%;" +
+        "background:#c96b24;color:#fff;font-size:22px;line-height:1;" +
+        "box-shadow:0 2px 8px rgba(0,0,0,.35);z-index:1000;display:none;";
+
+    tombol.addEventListener("click", function(){
+        kolomCari.scrollIntoView({behavior:"smooth", block:"center"});
+        kolomCari.focus({preventScroll:true});
+    });
+
+    halaman.appendChild(tombol);
+
+    // Tombol hanya muncul selama kolom Search tidak terlihat di layar
+    if("IntersectionObserver" in window){
+        new IntersectionObserver(function(entri){
+            tombol.style.display = entri[0].isIntersecting ? "none" : "block";
+        }).observe(kolomCari);
+    }
 
 }
 
@@ -1472,6 +1604,7 @@ window.lunasTitipan = lunasTitipan;
 window.hapusTitipan = hapusTitipan;
 window.cariToko = cariToko;
 window.toggleArsip = toggleArsip;
+window.toggleBulanArsip = toggleBulanArsip;
 
 
 // MULAI MEMBACA FIREBASE, LALU COBA KIRIM SISA DATA YANG BELUM TERSINKRON
