@@ -535,7 +535,19 @@ function toggleArsip(){
 
 
 // CARI TITIPAN
+// Diberi jeda 250 ms: selama masih mengetik/menghapus cepat, daftar tidak
+// dirender ulang di tiap huruf, cukup sekali setelah berhenti mengetik
+let timerCari = null;
+
 function cariToko(){
+
+    clearTimeout(timerCari);
+
+    timerCari = setTimeout(jalankanCariToko, 250);
+
+}
+
+function jalankanCariToko(){
 
     let kata = document
         .getElementById("cariToko")
