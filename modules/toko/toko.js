@@ -330,8 +330,9 @@ function tampilTitipan(data = titipan){
         tombolArsip.textContent = statusBuka + " Arsip Nota Pengambilan (" + selesai.length + ")";
     }
 
-    area.innerHTML = "";
-    if(areaArsip) areaArsip.innerHTML = "";
+    // Kumpulkan HTML dulu di string, dipasang sekali di akhir (lebih ringan)
+    let htmlBerjalan = "";
+    let htmlArsip = "";
 
     let urut = [...data].sort((a, b) => {
         return new Date(b.tanggalKirim) - new Date(a.tanggalKirim);
@@ -392,7 +393,7 @@ function tampilTitipan(data = titipan){
                 })()}
             `;
 
-            tujuan.innerHTML += `
+            htmlArsip += `
 
             <div class="card">
 
@@ -471,7 +472,7 @@ function tampilTitipan(data = titipan){
                 </table>
             `;
 
-            area.innerHTML += `
+            htmlBerjalan += `
 
             <div class="card">
 
@@ -512,6 +513,9 @@ function tampilTitipan(data = titipan){
         }
 
     });
+
+    area.innerHTML = htmlBerjalan;
+    if(areaArsip) areaArsip.innerHTML = htmlArsip;
 
 }
 
